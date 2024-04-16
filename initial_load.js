@@ -1,5 +1,14 @@
 const { pgClient, pgClientOLTP } = require("./dbClient");
 const dayjs = require("dayjs");
+const {
+  getOrCreateAge,
+  getOrCreateDate,
+  getOrCreateSeat,
+  getOrCreateService,
+  getOrCreateStation,
+  getOrCreateTime,
+  getOrCreateWagon,
+} = require("./dimension_creators");
 
 pgClientOLTP.connect().then(() => {
   pgClient.connect().then(() => {
@@ -40,6 +49,7 @@ async function lodatServicesAndTicketSalesFacts() {
   const { rows: servicesSales } = await pgClientOLTP.query(
     `SELECT * FROM tickets_services as ts INNER JOIN additional_service s ON ts.additional_service_id = s.id;`
   );
+
   for (let saleItem of ticketSales) {
     const ticketSale = saleItem.sale;
     try {
@@ -144,7 +154,7 @@ async function lodatServicesAndTicketSalesFacts() {
       });
 
       const res = await pgClient.query(
-        `INSERT INTO fact_sales_services(wagon, date_usage, seat, time_sale, start_station, final_station, service, service_price) VALUES 
+        `INSERT INTO fact_sales_services(wagon, date_usage, seat, time_sale, start_station, final_station, service, service_price) VALUES
       (${wagonId}, ${dateId}, ${seatId}, ${timeId}, ${startStationid}, ${finalStationId}, ${serviceId}, ${service.price_with_discount});`
       );
       console.log("Inserted rows -", res.rowCount);
@@ -154,142 +164,75 @@ async function lodatServicesAndTicketSalesFacts() {
       await pgClient.query("ROLLBACK TRANSACTION");
     }
   }
-}
 
-async function getOrCreateService(service) {
-  let serviceId;
-  const { rows: existingService, rowsCount: serviceExists } =
-    await pgClient.query(
-      `SELECT id FROM service WHERE name = '${service.name}';`
-    );
-  if (serviceExists) {
-    serviceId = existingService[0].id;
-  } else {
-    const { rows: insertedService } = await pgClient.query(
-      `INSERT INTO service(name, price) VALUES ('${service.name}', ${service.price}) RETURNING id;`
-    );
-    serviceId = insertedService[0].id;
-  }
-  return serviceId;
-}
+  const { rows: wagonsEfficiency } =
+    await pgClientOLTP.query(`SELECT w.id as wagon_id, json_build_object('wagon', w, 'train', tr) as w_data, w.rental_price, CAST(COUNT(*)  as DECIMAL) / (SELECT COUNT(*) FROM seat st WHERE st.wagon_id = w.id)
+       as occupancy_percentage,
+       COUNT(*) as passenger_count, COALESCE(SUM(t.price *
+       (SELECT COUNT(*) FROM ticket t JOIN seat s ON t.seat_id = s.id JOIN wagon wag ON s.wagon_id = w.id WHERE wag.id = w.id)), 0)
+       as tickets_income,
+  COALESCE((SELECT SUM(srv.price) FROM tickets_services ts
+        JOIN ticket tck ON ts.ticket_id = tck.id FULL OUTER JOIN additional_service srv ON srv.id = ts.additional_service_id
+        JOIN seat st ON tck.seat_id = st.id JOIN wagon wgn ON st.wagon_id = wgn.id WHERE wgn.id = w.id), 0) as services_income
+FROM ticket t
+    JOIN seat s ON t.seat_id = s.id
+    FULL OUTER JOIN wagon w ON s.wagon_id = w.id
+    JOIN train tr ON w.train_id = tr.id
+    GROUP BY w.id, tr.id;`);
 
-async function getOrCreateWagon(wagon, train) {
-  let wagonid;
-  const { rows: existingWagons, rowCount: wagonExists } = await pgClient.query(
-    `SELECT id FROM wagon WHERE wagon_number = '${wagon.number}' AND train_number = '${train.number}'`
-  );
-  if (wagonExists) {
-    wagonid = existingWagons[0].id;
-  } else {
-    const { rows: insertedWagon } = await pgClient.query(
-      `INSERT INTO wagon(wagon_type, train_number, train_type, wagon_number, train_class) VALUES
-          ('${wagon.type}', '${train.number}', '${train.type}', '${wagon.number}', '${train.class}') RETURNING id;`
-    );
-    wagonid = insertedWagon[0].id;
-  }
-  return wagonid;
-}
+  const { rows: wagonRoute } =
+    await pgClientOLTP.query(`SELECT w.id as wagon_id,
+       json_agg(json_build_object('order', rt."order", 'arrival_station', ar_s.name, 'departure_station', d_s.name) ORDER BY rt."order") as route
+      FROM route_part rt
+          JOIN wagon w ON rt.wagon_id = w.id
+          JOIN segment sgm ON rt.segment_id = sgm.id
+          JOIN station ar_s ON sgm.a_station_id = ar_s.id
+          JOIN station d_s ON sgm.d_station_id = d_s.id
+      GROUP BY w.id;`);
 
-async function getOrCreateSeat(seat) {
-  let seatId;
-  const { rows: existingSeat, rowCount: seatExists } = await pgClient.query(
-    `SELECT id FROM seat WHERE number = ${+seat.number};`
-  );
-  if (seatExists) {
-    seatId = existingSeat[0].id;
-  } else {
-    const { rows: insertedSeat } = await pgClient.query(
-      `INSERT INTO seat(number) VALUES (${+seat.number}) RETURNING id;`
-    );
-    seatId = insertedSeat[0].id;
-  }
-  return seatId;
-}
+  for (efficiencyUnit of wagonsEfficiency) {
+    try {
+      await pgClient.query("BEGIN TRANSACTION");
+      const wagonRt = wagonRoute.find(
+        (item) => item.wagon_id === efficiencyUnit.wagon_id
+      );
 
-async function getOrCreateAge(age) {
-  let ageGroup;
-  if (age < 18) {
-    ageGroup = "Under 18";
-  } else if (age > 18 && age < 25) {
-    ageGroup = "18 to 25";
-  } else if (age >= 25 && age < 65) {
-    ageGroup = "25 to 65";
-  } else {
-    ageGroup = "Above 65";
-  }
-  let ageId;
-  const { rows: existingAge, rowCount: ageExists } = await pgClient.query(
-    `SELECT id FROM age WHERE age_value = ${age};`
-  );
-  if (ageExists) {
-    ageId = existingAge[0].id;
-  } else {
-    const { rows: insertedAge } = await pgClient.query(
-      `INSERT INTO age(age_value, age_group) VALUES (${age}, '${ageGroup}') RETURNING id;`
-    );
-    ageId = insertedAge[0].id;
-  }
-  return ageId;
-}
+      if (!wagonRt) {
+        continue;
+      }
+      const wagonId = await getOrCreateWagon(
+        efficiencyUnit.w_data.wagon,
+        efficiencyUnit.w_data.train
+      );
+      const dateId = await getOrCreateDate(dayjs().set("date", 1));
+      const startStationid = await getOrCreateStation(
+        wagonRt.route[0].arrival_station
+      );
+      const finalStationId = await getOrCreateStation(
+        wagonRt.route[wagonRt.route.length - 1].departure_station
+      );
 
-async function getOrCreateDate(date) {
-  let dateId;
-  const { rows: existingDate, rowCount: dateExists } = await pgClient.query(
-    `SELECT id FROM date d WHERE d.date = '${date.date()}' AND d.year = ${date.year()} AND d.month = ${date.month()};`
-  );
-  if (dateExists) {
-    dateId = existingDate[0].id;
-  } else {
-    const { rows: insertedDate } = await pgClient.query(
-      `INSERT INTO date(date, year, month, day, season, month_with_year) 
-          VALUES ('${date.date()}', ${date.year()}, ${date.month()}, ${date.day()}, '${getSeason(
-        date.month() + 1
-      )}', '${date.month()}.${date.year()}') RETURNING id;`
-    );
-    dateId = insertedDate[0].id;
-  }
-  return dateId;
-}
-
-async function getOrCreateTime(date) {
-  let timeId;
-  const { rows: existingTime, rowCount: timeExists } = await pgClient.query(
-    `SELECT id FROM time WHERE hours = ${date.hour()} AND minutes = ${date.minute()}`
-  );
-  if (timeExists) {
-    timeId = existingTime[0].id;
-  } else {
-    const { rows: insertedTime } = await pgClient.query(
-      `INSERT INTO time(minutes, hours) VALUES (${date.hour()}, ${date.minute()}) RETURNING id;`
-    );
-    timeId = insertedTime[0].id;
-  }
-  return timeId;
-}
-
-async function getOrCreateStation(name) {
-  const { rows: existingStation, rowCount: stationExists } =
-    await pgClient.query(`SELECT id FROM station WHERE name = '${name}';`);
-  if (stationExists) {
-    return existingStation[0].id;
-  } else {
-    const { rows: insertedStation } = await pgClient.query(
-      `INSERT INTO station(name) VALUES ('${name}') RETURNING id;`
-    );
-    return insertedStation[0].id;
-  }
-}
-
-function getSeason(month) {
-  if (month < 3) {
-    return "Winter";
-  } else if (month >= 3 && month < 6) {
-    return "Spring";
-  } else if (month >= 6 && month < 9) {
-    return "Summer";
-  } else if (month >= 9 && month < 12) {
-    return "Autumn";
-  } else {
-    return "Winter";
+      const res = await pgClient.query(
+        `INSERT INTO 
+        fact_wagon_efficiency(wagon, date, start_station, final_station, wagon_prime_cost, 
+          tickets_income, services_income, marginal_income, occupancy_percentage, average_passenger_count) 
+        VALUES 
+        (${wagonId}, ${dateId}, ${startStationid}, ${finalStationId},${
+          efficiencyUnit.rental_price
+        }, ${efficiencyUnit.tickets_income},
+        ${efficiencyUnit.services_income}, 
+          ${
+            efficiencyUnit.rental_price -
+            (efficiencyUnit.tickets_income + efficiencyUnit.services_income)
+          }, ${+efficiencyUnit.occupancy_percentage * 100}, ${
+          efficiencyUnit.passenger_count
+        })`
+      );
+      console.log("Inserted rows:", res.rowCount);
+      await pgClient.query("COMMIT TRANSACTION");
+    } catch (e) {
+      console.log(e);
+      await pgClient.query("ROLLBACK TRANSACTION");
+    }
   }
 }
