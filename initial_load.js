@@ -195,8 +195,9 @@ async function lodatServicesAndTicketSalesFacts() {
       GROUP BY w.id;`);
 
   const { rows: wagonsEfficiency } =
-    await pgClientOLTP.query(`SELECT  w.id as wagon_id, json_build_object('wagon', w, 'train', tr) as w_data, extract_date_components(t.purchase_timestamp::DATE) as sale_date,
-              CAST(ROUND(w.rental_price) as DECIMAL) / 28 as rental_price,
+    await pgClientOLTP.query(`SELECT  w.id as wagon_id, json_build_object('wagon', w, 'train', tr) as w_data, 
+              extract_date_components(t.purchase_timestamp::DATE) as sale_date,
+              CAST(ROUND(w.rental_price) as DECIMAL) / 30 as rental_price,
               COUNT(t)
                   as passenger_count,
               ROUND(COALESCE(SUM(t.price), 0)::NUMERIC, 2)
@@ -205,7 +206,8 @@ async function lodatServicesAndTicketSalesFacts() {
                   as services_income,
               ROUND(CAST(COALESCE(COUNT(t), 0) * 100 as DECIMAL) / (SELECT COUNT(*) FROM seat WHERE wagon_id = w.id), 2)
                   as occupancy_percentage,
-              ROUND((COALESCE(SUM(t.price), 0) + COALESCE(SUM(ts.price_with_discount), 0) - CAST(w.rental_price as DECIMAL) / 28)::NUMERIC, 2)
+              ROUND((COALESCE(SUM(t.price), 0) + COALESCE(SUM(ts.price_with_discount), 0) 
+              - CAST(w.rental_price as DECIMAL) / 30)::NUMERIC, 2)
                   as marginal_income
         FROM ticket t
             JOIN seat st ON t.seat_id = st.id
@@ -245,9 +247,9 @@ async function lodatServicesAndTicketSalesFacts() {
         fact_wagon_efficiency(wagon, date, start_station, final_station, wagon_prime_cost,
           tickets_income, services_income, marginal_income, occupancy_percentage, average_passenger_count)
         VALUES
-        (${wagonId}, ${dateId}, ${startStationid}, ${finalStationId},${efficiencyUnit.rental_price}, ${efficiencyUnit.tickets_income},
-        ${efficiencyUnit.services_income},
-          ${efficiencyUnit.marginal_income}, ${efficiencyUnit.occupancy_percentage}, ${efficiencyUnit.passenger_count})`
+        (${wagonId}, ${dateId}, ${startStationid}, ${finalStationId},${efficiencyUnit.rental_price},
+        ${efficiencyUnit.tickets_income}, ${efficiencyUnit.services_income}, ${efficiencyUnit.marginal_income},
+        ${efficiencyUnit.occupancy_percentage}, ${efficiencyUnit.passenger_count})`
       );
       console.log("Inserted rows:", res.rowCount);
       await pgClient.query("COMMIT TRANSACTION");
