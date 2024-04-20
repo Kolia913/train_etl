@@ -245,7 +245,7 @@ async function lodatServicesAndTicketSalesFacts() {
       const res = await pgClient.query(
         `INSERT INTO
         fact_wagon_efficiency(wagon, date, start_station, final_station, wagon_prime_cost,
-          tickets_income, services_income, marginal_income, occupancy_percentage, average_passenger_count)
+          tickets_income, services_income, marginal_income, occupancy_percentage, passenger_count)
         VALUES
         (${wagonId}, ${dateId}, ${startStationid}, ${finalStationId},${efficiencyUnit.rental_price},
         ${efficiencyUnit.tickets_income}, ${efficiencyUnit.services_income}, ${efficiencyUnit.marginal_income},

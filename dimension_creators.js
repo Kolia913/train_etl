@@ -4,7 +4,7 @@ async function getOrCreateService(service) {
   let serviceId;
   const { rows: existingService, rowCount: serviceExists } =
     await pgClient.query(
-      `SELECT id FROM service WHERE name = '${service.name}';`
+      `SELECT id FROM service WHERE name = '${service.name}' AND price = ${service.price};`
     );
   if (serviceExists) {
     serviceId = existingService[0].id;
