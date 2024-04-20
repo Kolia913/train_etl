@@ -69,7 +69,7 @@ CREATE TABLE fact_wagon_efficiency (
   services_income FLOAT,
   marginal_income FLOAT,
   occupancy_percentage FLOAT,
-  average_passenger_count INTEGER,
+  passenger_count INTEGER,
   PRIMARY KEY (wagon, date, start_station, final_station)
 );
 
