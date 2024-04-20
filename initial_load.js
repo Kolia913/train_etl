@@ -165,20 +165,24 @@ async function lodatServicesAndTicketSalesFacts() {
     }
   }
 
-  const { rows: wagonsEfficiency } =
-    await pgClientOLTP.query(`SELECT w.id as wagon_id, json_build_object('wagon', w, 'train', tr) as w_data, w.rental_price, CAST(COUNT(*)  as DECIMAL) / (SELECT COUNT(*) FROM seat st WHERE st.wagon_id = w.id)
-       as occupancy_percentage,
-       COUNT(*) as passenger_count, COALESCE(SUM(t.price *
-       (SELECT COUNT(*) FROM ticket t JOIN seat s ON t.seat_id = s.id JOIN wagon wag ON s.wagon_id = w.id WHERE wag.id = w.id)), 0)
-       as tickets_income,
-  COALESCE((SELECT SUM(srv.price) FROM tickets_services ts
-        JOIN ticket tck ON ts.ticket_id = tck.id FULL OUTER JOIN additional_service srv ON srv.id = ts.additional_service_id
-        JOIN seat st ON tck.seat_id = st.id JOIN wagon wgn ON st.wagon_id = wgn.id WHERE wgn.id = w.id), 0) as services_income
-FROM ticket t
-    JOIN seat s ON t.seat_id = s.id
-    FULL OUTER JOIN wagon w ON s.wagon_id = w.id
-    JOIN train tr ON w.train_id = tr.id
-    GROUP BY w.id, tr.id;`);
+  await pgClientOLTP.query(`CREATE OR REPLACE FUNCTION extract_date_components(input_date DATE)
+                    RETURNS TEXT AS
+                    $$
+                    DECLARE
+                        day_component TEXT;
+                        month_component TEXT;
+                        year_component TEXT;
+                    BEGIN
+                        -- Extract day, month, and year components
+                        day_component := LPAD(EXTRACT(DAY FROM input_date)::TEXT, 2, '0');
+                        month_component := LPAD(EXTRACT(MONTH FROM input_date)::TEXT, 2, '0');
+                        year_component := EXTRACT(YEAR FROM input_date)::TEXT;
+
+                        -- Return formatted date string
+                        RETURN year_component || '-' || month_component || '-' || day_component;
+                    END;
+                    $$
+                    LANGUAGE plpgsql;`);
 
   const { rows: wagonRoute } =
     await pgClientOLTP.query(`SELECT w.id as wagon_id,
@@ -189,6 +193,30 @@ FROM ticket t
           JOIN station ar_s ON sgm.a_station_id = ar_s.id
           JOIN station d_s ON sgm.d_station_id = d_s.id
       GROUP BY w.id;`);
+
+  const { rows: wagonsEfficiency } =
+    await pgClientOLTP.query(`SELECT  w.id as wagon_id, json_build_object('wagon', w, 'train', tr) as w_data, extract_date_components(t.purchase_timestamp::DATE) as sale_date,
+              ROUND(w.rental_price) as rental_price,
+              COUNT(t)
+                  as passenger_count,
+              ROUND(COALESCE(SUM(t.price), 0)::NUMERIC, 2)
+                  as tickets_income,
+              COALESCE(SUM(ts.price_with_discount), 0)
+                  as services_income,
+              ROUND(CAST(COALESCE(COUNT(t), 0) * 100 as DECIMAL) / (SELECT COUNT(*) FROM seat WHERE wagon_id = w.id), 2)
+                  as occupancy_percentage,
+              ROUND((w.rental_price - COALESCE(SUM(t.price), 0) + COALESCE(SUM(ts.price_with_discount), 0))::NUMERIC, 2)
+                  as marginal_income
+        FROM ticket t
+            JOIN seat st ON t.seat_id = st.id
+            FULL JOIN wagon w ON st.wagon_id = w.id
+            FULL JOIN tickets_services ts ON  ts.ticket_id = t.id
+            JOIN train tr ON w.train_id = tr.id
+        WHERE extract_date_components(t.purchase_timestamp::DATE) >=
+              extract_date_components((SELECT MIN(purchase_timestamp)::DATE FROM ticket)) AND
+            extract_date_components(t.purchase_timestamp::DATE) <=
+            extract_date_components((SELECT MAX(purchase_timestamp)::DATE FROM ticket))
+        GROUP BY w.id, tr.id, extract_date_components(t.purchase_timestamp::DATE);`);
 
   for (efficiencyUnit of wagonsEfficiency) {
     try {
@@ -204,7 +232,7 @@ FROM ticket t
         efficiencyUnit.w_data.wagon,
         efficiencyUnit.w_data.train
       );
-      const dateId = await getOrCreateDate(dayjs().set("date", 1));
+      const dateId = await getOrCreateDate(dayjs(efficiencyUnit.sale_date));
       const startStationid = await getOrCreateStation(
         wagonRt.route[0].arrival_station
       );
@@ -213,20 +241,13 @@ FROM ticket t
       );
 
       const res = await pgClient.query(
-        `INSERT INTO 
-        fact_wagon_efficiency(wagon, date, start_station, final_station, wagon_prime_cost, 
-          tickets_income, services_income, marginal_income, occupancy_percentage, average_passenger_count) 
-        VALUES 
-        (${wagonId}, ${dateId}, ${startStationid}, ${finalStationId},${
-          efficiencyUnit.rental_price
-        }, ${efficiencyUnit.tickets_income},
-        ${efficiencyUnit.services_income}, 
-          ${
-            efficiencyUnit.rental_price -
-            (efficiencyUnit.tickets_income + efficiencyUnit.services_income)
-          }, ${+efficiencyUnit.occupancy_percentage * 100}, ${
-          efficiencyUnit.passenger_count
-        })`
+        `INSERT INTO
+        fact_wagon_efficiency(wagon, date, start_station, final_station, wagon_prime_cost,
+          tickets_income, services_income, marginal_income, occupancy_percentage, average_passenger_count)
+        VALUES
+        (${wagonId}, ${dateId}, ${startStationid}, ${finalStationId},${efficiencyUnit.rental_price}, ${efficiencyUnit.tickets_income},
+        ${efficiencyUnit.services_income},
+          ${efficiencyUnit.marginal_income}, ${efficiencyUnit.occupancy_percentage}, ${efficiencyUnit.passenger_count})`
       );
       console.log("Inserted rows:", res.rowCount);
       await pgClient.query("COMMIT TRANSACTION");

@@ -52,3 +52,65 @@ FROM route_part rt
     JOIN station ar_s ON sgm.a_station_id = ar_s.id
     JOIN station d_s ON sgm.d_station_id = d_s.id
 GROUP BY w.id;
+
+SELECT w.id as wagon_id, ROUND(w.rental_price),
+       COUNT(t)
+           as passenger_count,
+       ROUND(COALESCE(SUM(t.price), 0)::NUMERIC, 2)
+           as tickets_income,
+       COALESCE(SUM(ts.price_with_discount), 0)
+           as services_income,
+       ROUND(CAST(COALESCE(COUNT(t), 0) * 100 as DECIMAL) / (SELECT COUNT(*) FROM seat WHERE wagon_id = w.id), 2)
+           as occupancy_percentage,
+       ROUND((w.rental_price - COALESCE(SUM(t.price), 0))::NUMERIC, 2)
+           as marginal_income
+FROM ticket t
+    JOIN seat st ON t.seat_id = st.id
+    FULL JOIN wagon w ON st.wagon_id = w.id
+    FULL JOIN tickets_services ts ON  ts.ticket_id = t.id
+GROUP BY w.id;
+
+CREATE OR REPLACE FUNCTION extract_date_components(input_date DATE)
+RETURNS TEXT AS
+$$
+DECLARE
+    day_component TEXT;
+    month_component TEXT;
+    year_component TEXT;
+BEGIN
+    -- Extract day, month, and year components
+    day_component := LPAD(EXTRACT(DAY FROM input_date)::TEXT, 2, '0');
+    month_component := LPAD(EXTRACT(MONTH FROM input_date)::TEXT, 2, '0');
+    year_component := EXTRACT(YEAR FROM input_date)::TEXT;
+
+    -- Return formatted date string
+    RETURN year_component || '-' || month_component || '-' || day_component;
+END;
+$$
+LANGUAGE plpgsql;
+
+SELECT MIN(purchase_timestamp) AS first_sale, MAX(purchase_timestamp) AS last_sale  FROM ticket;
+
+
+SELECT  w.id as wagon_id, extract_date_components(t.purchase_timestamp::DATE),
+       ROUND(w.rental_price) as rental_price,
+       COUNT(t)
+           as passenger_count,
+       ROUND(COALESCE(SUM(t.price), 0)::NUMERIC, 2)
+           as tickets_income,
+       COALESCE(SUM(ts.price_with_discount), 0)
+           as services_income,
+       ROUND(CAST(COALESCE(COUNT(t), 0) * 100 as DECIMAL) / (SELECT COUNT(*) FROM seat WHERE wagon_id = w.id), 2)
+           as occupancy_percentage,
+       ROUND((w.rental_price - COALESCE(SUM(t.price), 0) + COALESCE(SUM(ts.price_with_discount), 0))::NUMERIC, 2)
+           as marginal_income
+FROM ticket t
+    JOIN seat st ON t.seat_id = st.id
+    FULL JOIN wagon w ON st.wagon_id = w.id
+    FULL JOIN tickets_services ts ON  ts.ticket_id = t.id
+    JOIN train tr ON w.train_id = tr.id
+WHERE extract_date_components(t.purchase_timestamp::DATE) >=
+      extract_date_components((SELECT MIN(purchase_timestamp)::DATE FROM ticket)) AND
+    extract_date_components(t.purchase_timestamp::DATE) <=
+    extract_date_components((SELECT MAX(purchase_timestamp)::DATE FROM ticket))
+GROUP BY w.id, tr.id, extract_date_components(t.purchase_timestamp::DATE);

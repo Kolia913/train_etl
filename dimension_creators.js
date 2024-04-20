@@ -2,7 +2,7 @@ const { pgClient } = require("./dbClient");
 
 async function getOrCreateService(service) {
   let serviceId;
-  const { rows: existingService, rowsCount: serviceExists } =
+  const { rows: existingService, rowCount: serviceExists } =
     await pgClient.query(
       `SELECT id FROM service WHERE name = '${service.name}';`
     );
