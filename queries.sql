@@ -116,3 +116,54 @@ SELECT  w.id as wagon_id, json_build_object('wagon', w, 'train', tr) as w_data,
             extract_date_components(t.purchase_timestamp::DATE) <=
             extract_date_components((SELECT MAX(purchase_timestamp)::DATE FROM ticket))
         GROUP BY w.id, tr.id, extract_date_components(t.purchase_timestamp::DATE);
+
+
+-- Create a table to store updated records
+CREATE TABLE IF NOT EXISTS updated_log (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(255),
+    record_id INT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create a table to store created records
+CREATE TABLE IF NOT EXISTS created_log (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(255),
+    record_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create a trigger function to log updates
+CREATE OR REPLACE FUNCTION log_update()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO updated_log (table_name, record_id)
+    VALUES (TG_TABLE_NAME, NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+;
+
+-- Create a trigger function to log inserts
+CREATE OR REPLACE FUNCTION log_insert()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO created_log (table_name, record_id)
+    VALUES (TG_TABLE_NAME, NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create a trigger to call the log_update function after an update
+CREATE TRIGGER record_update
+AFTER UPDATE ON ticket
+FOR EACH ROW
+EXECUTE FUNCTION log_update();
+
+-- Create a trigger to call the log_insert function after an insert
+CREATE TRIGGER record_insert
+AFTER INSERT ON ticket
+FOR EACH ROW
+EXECUTE FUNCTION log_insert();
+
