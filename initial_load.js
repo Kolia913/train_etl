@@ -196,7 +196,7 @@ async function lodatServicesAndTicketSalesFacts() {
 
   const { rows: wagonsEfficiency } =
     await pgClientOLTP.query(`SELECT  w.id as wagon_id, json_build_object('wagon', w, 'train', tr) as w_data, extract_date_components(t.purchase_timestamp::DATE) as sale_date,
-              ROUND(w.rental_price) as rental_price,
+              CAST(ROUND(w.rental_price) as DECIMAL) / 28 as rental_price,
               COUNT(t)
                   as passenger_count,
               ROUND(COALESCE(SUM(t.price), 0)::NUMERIC, 2)
@@ -205,7 +205,7 @@ async function lodatServicesAndTicketSalesFacts() {
                   as services_income,
               ROUND(CAST(COALESCE(COUNT(t), 0) * 100 as DECIMAL) / (SELECT COUNT(*) FROM seat WHERE wagon_id = w.id), 2)
                   as occupancy_percentage,
-              ROUND((w.rental_price - COALESCE(SUM(t.price), 0) + COALESCE(SUM(ts.price_with_discount), 0))::NUMERIC, 2)
+              ROUND((COALESCE(SUM(t.price), 0) + COALESCE(SUM(ts.price_with_discount), 0) - CAST(w.rental_price as DECIMAL) / 28)::NUMERIC, 2)
                   as marginal_income
         FROM ticket t
             JOIN seat st ON t.seat_id = st.id
