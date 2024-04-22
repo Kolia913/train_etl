@@ -170,11 +170,17 @@ EXECUTE FUNCTION log_insert();
 INSERT INTO ticket(price, price_with_discount, purchase_timestamp, usage_timestamp, passenger_id, seat_id, fare_id)
 VALUES (250, 230, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
         (SELECT id FROM passenger LIMIT 1),
-        (SELECT id FROM seat LIMIT 1), (SELECT id FROM fare LIMIT 1));
+        (SELECT id FROM seat WHERE id = 2), (SELECT id FROM fare LIMIT 1));
 
-INSERT INTO ticket_route(ticket_id, route_part_id) VALUES (14937, 1), (14937, 2), (14937, 3);
+INSERT INTO ticket_route(ticket_id, route_part_id) VALUES (14938, 1), (14938, 2), (14938, 3);
 
 INSERT INTO tickets_services(ticket_id, additional_service_id, price_with_discount, sale_timestamp)
-VALUES (14937, 3, 0.7, CURRENT_TIMESTAMP);
+VALUES (14938, 3, 0.7, CURRENT_TIMESTAMP);
 
 UPDATE ticket SET usage_timestamp = CURRENT_TIMESTAMP WHERE id = 301;
+
+SELECT string_to_array('14937', ',')::VARCHAR;
+
+DELETE FROM created_log WHERE table_name = 'ticket';
+
+UPDATE ticket SET usage_timestamp = CURRENT_TIMESTAMP WHERE id = 14937;
