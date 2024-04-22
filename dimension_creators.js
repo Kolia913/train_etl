@@ -79,14 +79,17 @@ async function getOrCreateAge(age) {
 async function getOrCreateDate(date) {
   let dateId;
   const { rows: existingDate, rowCount: dateExists } = await pgClient.query(
-    `SELECT id FROM date d WHERE d.date = '${date.date()}' AND d.year = ${date.year()} AND d.month = ${date.month()};`
+    `SELECT id FROM date d WHERE d.date = ${date.date()} 
+    AND d.year = ${date.year()} 
+    AND d.month = ${date.month()} 
+    AND d.day = ${date.day()};`
   );
   if (dateExists) {
     dateId = existingDate[0].id;
   } else {
     const { rows: insertedDate } = await pgClient.query(
       `INSERT INTO date(date, year, month, day, season, month_with_year) 
-          VALUES ('${date.date()}', ${date.year()}, ${date.month()}, ${date.day()}, '${getSeason(
+          VALUES (${date.date()}, ${date.year()}, ${date.month()}, ${date.day()}, '${getSeason(
         date.month() + 1
       )}', '${date.month()}.${date.year()}') RETURNING id;`
     );
@@ -124,6 +127,20 @@ async function getOrCreateStation(name) {
   }
 }
 
+async function getOrCrateNADate() {
+  const { rows: NADate, rowCount: NADateExists } = await pgClient.query(
+    `SELECT id FROM date d WHERE d.month_with_year  = 'N/A';`
+  );
+  if (NADateExists) {
+    return NADate[0].id;
+  } else {
+    const { rows: insertedNADate } =
+      await pgClient.query(`INSERT INTO date(date, year, month, day, season, month_with_year)
+                            VALUES (0, 0, 0, 0, 'N/A', 'N/A');`);
+    return insertedNADate[0].id;
+  }
+}
+
 function getSeason(month) {
   if (month < 3) {
     return "Winter";
@@ -141,6 +158,7 @@ function getSeason(month) {
 module.exports = {
   getOrCreateAge,
   getOrCreateDate,
+  getOrCrateNADate,
   getOrCreateSeat,
   getOrCreateService,
   getOrCreateStation,

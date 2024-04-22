@@ -156,14 +156,25 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create a trigger to call the log_update function after an update
-CREATE TRIGGER record_update
+CREATE OR REPLACE TRIGGER record_update
 AFTER UPDATE ON ticket
 FOR EACH ROW
 EXECUTE FUNCTION log_update();
 
 -- Create a trigger to call the log_insert function after an insert
-CREATE TRIGGER record_insert
+CREATE OR REPLACE TRIGGER record_insert
 AFTER INSERT ON ticket
 FOR EACH ROW
 EXECUTE FUNCTION log_insert();
 
+INSERT INTO ticket(price, price_with_discount, purchase_timestamp, usage_timestamp, passenger_id, seat_id, fare_id)
+VALUES (250, 230, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+        (SELECT id FROM passenger LIMIT 1),
+        (SELECT id FROM seat LIMIT 1), (SELECT id FROM fare LIMIT 1));
+
+INSERT INTO ticket_route(ticket_id, route_part_id) VALUES (14937, 1), (14937, 2), (14937, 3);
+
+INSERT INTO tickets_services(ticket_id, additional_service_id, price_with_discount, sale_timestamp)
+VALUES (14937, 3, 0.7, CURRENT_TIMESTAMP);
+
+UPDATE ticket SET usage_timestamp = CURRENT_TIMESTAMP WHERE id = 301;

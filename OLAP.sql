@@ -31,7 +31,7 @@ CREATE TABLE service (
 
 CREATE TABLE date (
     id SERIAL PRIMARY KEY,
-    date VARCHAR,
+    date INTEGER,
     year INTEGER,
     month INTEGER,
     day INTEGER,
