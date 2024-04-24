@@ -90,11 +90,17 @@ async function updateTicketUsage() {
       const wagonId = await getOrCreateWagon(wagon, train);
 
       const startStationid = await getOrCreateStation(
-        ticketRoute.route.route[0].a_station.name
+        ticketRoute.route.route[0].a_station.name,
+        ticketRoute.route.route[0].a_station.lon,
+        ticketRoute.route.route[0].a_station.lat
       );
       const finalStationId = await getOrCreateStation(
         ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
-          .name
+          .name,
+        ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
+          .lon,
+        ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
+          .lat
       );
 
       const days_diff =

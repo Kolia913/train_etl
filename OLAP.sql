@@ -9,7 +9,9 @@ CREATE TABLE wagon (
 
 CREATE TABLE station (
     id SERIAL PRIMARY KEY,
-    name VARCHAR
+    name VARCHAR,
+    lon DOUBLE PRECISION,
+    lat DOUBLE PRECISION
 );
 
 CREATE TABLE seat (

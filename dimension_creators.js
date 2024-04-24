@@ -114,14 +114,14 @@ async function getOrCreateTime(date) {
   return timeId;
 }
 
-async function getOrCreateStation(name) {
+async function getOrCreateStation(name, lon, lat) {
   const { rows: existingStation, rowCount: stationExists } =
     await pgClient.query(`SELECT id FROM station WHERE name = '${name}';`);
   if (stationExists) {
     return existingStation[0].id;
   } else {
     const { rows: insertedStation } = await pgClient.query(
-      `INSERT INTO station(name) VALUES ('${name}') RETURNING id;`
+      `INSERT INTO station(name, lon, lat) VALUES ('${name}', ${lon}, ${lat}) RETURNING id;`
     );
     return insertedStation[0].id;
   }

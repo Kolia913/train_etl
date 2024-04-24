@@ -86,11 +86,17 @@ async function lodatServicesAndTicketSalesFacts() {
       const wagonId = await getOrCreateWagon(wagon, train);
 
       const startStationid = await getOrCreateStation(
-        ticketRoute.route.route[0].a_station.name
+        ticketRoute.route.route[0].a_station.name,
+        ticketRoute.route.route[0].a_station.lon,
+        ticketRoute.route.route[0].a_station.lat
       );
       const finalStationId = await getOrCreateStation(
         ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
-          .name
+          .name,
+        ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
+          .lon,
+        ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
+          .lat
       );
 
       const days_diff = date_usage.diff(date_sale, "day");
@@ -141,11 +147,17 @@ async function lodatServicesAndTicketSalesFacts() {
       const timeId = await getOrCreateTime(date_sale);
 
       const startStationid = await getOrCreateStation(
-        ticketRoute.route.route[0].a_station.name
+        ticketRoute.route.route[0].a_station.name,
+        ticketRoute.route.route[0].a_station.lon,
+        ticketRoute.route.route[0].a_station.lat
       );
       const finalStationId = await getOrCreateStation(
         ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
-          .name
+          .name,
+        ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
+          .lon,
+        ticketRoute.route.route[ticketRoute.route.route.length - 1].d_station
+          .lat
       );
 
       const serviceId = await getOrCreateService({
@@ -186,7 +198,7 @@ async function lodatServicesAndTicketSalesFacts() {
 
   const { rows: wagonRoute } =
     await pgClientOLTP.query(`SELECT w.id as wagon_id,
-       json_agg(json_build_object('order', rt."order", 'arrival_station', ar_s.name, 'departure_station', d_s.name) ORDER BY rt."order") as route
+       json_agg(json_build_object('order', rt."order", 'arrival_station', ar_s, 'departure_station', d_s) ORDER BY rt."order") as route
       FROM route_part rt
           JOIN wagon w ON rt.wagon_id = w.id
           JOIN segment sgm ON rt.segment_id = sgm.id
@@ -236,10 +248,14 @@ async function lodatServicesAndTicketSalesFacts() {
       );
       const dateId = await getOrCreateDate(dayjs(efficiencyUnit.sale_date));
       const startStationid = await getOrCreateStation(
-        wagonRt.route[0].arrival_station
+        wagonRt.route[0].arrival_station.name,
+        wagonRt.route[0].arrival_station.lon,
+        wagonRt.route[0].arrival_station.lat
       );
       const finalStationId = await getOrCreateStation(
-        wagonRt.route[wagonRt.route.length - 1].departure_station
+        wagonRt.route[wagonRt.route.length - 1].departure_station.name,
+        wagonRt.route[wagonRt.route.length - 1].departure_station.lon,
+        wagonRt.route[wagonRt.route.length - 1].departure_station.lat
       );
 
       const res = await pgClient.query(
