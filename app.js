@@ -13,6 +13,7 @@ const bodyParser = require("body-parser");
 const { createObjectCsvWriter } = require("csv-writer");
 const fs = require("node:fs");
 const { lodatServicesAndTicketSalesFacts } = require("./initial_load");
+const cors = require("cors");
 
 const PORT = process.env.PORT || 3030;
 
@@ -26,6 +27,7 @@ const collectStatsJob = cron.schedule("0 1 * * *", async () => {
 });
 
 app.use(bodyParser.json());
+app.use(cors());
 
 function makeAliasFromName(name) {
   if (name === "service") {
@@ -277,6 +279,16 @@ app.post("/initial-load", async (req, res) => {
     }
   } catch (e) {
     res.status(500).send("Internal server error!");
+  }
+});
+
+app.post("/collect-daily-stats", async (req, res) => {
+  try {
+    await collectDailyStats();
+    res.status(201).send("Daily stats collected!");
+  } catch (e) {
+    console.log(e);
+    res.status(500).send("Internal server error");
   }
 });
 

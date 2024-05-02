@@ -68,15 +68,36 @@ async function collectDailyStats() {
         wagonRt.route[wagonRt.route.length - 1].departure_station.lat
       );
 
-      const res = await pgClient.query(
-        `INSERT INTO
+      const existingEff = await pgClient.query(
+        `SELECT * FROM fact_wagon_efficiency WHERE wagon = ${wagonId} AND date = ${dateId} AND start_station = ${startStationid} AND final_station = ${finalStationId}`
+      );
+
+      if (existingEff.rowCount) {
+        await pgClient.query(
+          `UPDATE fact_wagon_efficiency SET 
+            wagon = ${wagonId}, 
+            date = ${dateId}, 
+            start_station = ${startStationid}, 
+            final_station = ${finalStationId},
+            wagon_prime_cost = ${efficiencyUnit.rental_price},
+            tickets_income = ${efficiencyUnit.tickets_income},
+            services_income = ${efficiencyUnit.services_income},
+            marginal_income = ${efficiencyUnit.marginal_income},
+            occupancy_percentage = ${efficiencyUnit.occupancy_percentage},
+            passenger_count = ${efficiencyUnit.passenger_count}
+          WHERE wagon = ${wagonId} AND date = ${dateId} AND start_station = ${startStationid} AND final_station = ${finalStationId};`
+        );
+      } else {
+        const res = await pgClient.query(
+          `INSERT INTO
         fact_wagon_efficiency(wagon, date, start_station, final_station, wagon_prime_cost,
           tickets_income, services_income, marginal_income, occupancy_percentage, passenger_count)
         VALUES
         (${wagonId}, ${dateId}, ${startStationid}, ${finalStationId},${efficiencyUnit.rental_price},
         ${efficiencyUnit.tickets_income}, ${efficiencyUnit.services_income}, ${efficiencyUnit.marginal_income},
         ${efficiencyUnit.occupancy_percentage}, ${efficiencyUnit.passenger_count})`
-      );
+        );
+      }
     } catch (e) {
       console.log(e);
       await pgClient.query("ROLLBACK TRANSACTION");
