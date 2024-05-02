@@ -10,11 +10,11 @@ const {
   getOrCreateWagon,
 } = require("./dimension_creators");
 
-pgClientOLTP.connect().then(() => {
-  pgClient.connect().then(() => {
-    lodatServicesAndTicketSalesFacts();
-  });
-});
+// pgClientOLTP.connect().then(() => {
+//   pgClient.connect().then(() => {
+//     lodatServicesAndTicketSalesFacts();
+//   });
+// });
 
 async function lodatServicesAndTicketSalesFacts() {
   console.log("Started inital load");
@@ -275,3 +275,7 @@ async function lodatServicesAndTicketSalesFacts() {
     }
   }
 }
+
+module.exports = {
+  lodatServicesAndTicketSalesFacts,
+};

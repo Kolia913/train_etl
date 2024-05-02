@@ -12,6 +12,7 @@ const app = express();
 const bodyParser = require("body-parser");
 const { createObjectCsvWriter } = require("csv-writer");
 const fs = require("node:fs");
+const { lodatServicesAndTicketSalesFacts } = require("./initial_load");
 
 const PORT = process.env.PORT || 3030;
 
@@ -251,6 +252,69 @@ app.post("/wagon-efficiency/export/csv", async (req, res) => {
     console.error("Error exporting to CSV:", e);
     res.status(500).send("Internal Server Error");
   }
+});
+
+app.post("/initial-load", async (req, res) => {
+  try {
+    const { rowCount: isEff } = await pgClient.query(
+      "SELECT * FROM fact_wagon_efficiency"
+    );
+    const { rowCount: isSrv } = await pgClient.query(
+      "SELECT * FROM fact_sales_services"
+    );
+    const { rowCount: isTckt } = await pgClient.query(
+      "SELECT * FROM fact_sales_and_usage"
+    );
+    if (isEff || isSrv || isTckt) {
+      res
+        .send(403)
+        .send(
+          "Your storage is not empty, please clean it before initial load data"
+        );
+    } else {
+      await lodatServicesAndTicketSalesFacts();
+      res.status(201).send("Initial load successfully completed!");
+    }
+  } catch (e) {
+    res.status(500).send("Internal server error!");
+  }
+});
+
+app.get("/stats", async (req, res) => {
+  const filters = req.query;
+  const { rows: sales } = await pgClient.query(
+    `SELECT COUNT(*) as sls_count FROM fact_sales_and_usage f 
+      JOIN wagon w ON f.wagon = w.id
+      JOIN date d ON f.date_sale = d.id
+      WHERE w.wagon_type = '${filters.wagonType}' AND d.month_with_year = '${filters.monthWithYear}';`
+  );
+
+  const { rows: services } =
+    await pgClient.query(`SELECT COUNT(*) as srv_count FROM fact_sales_services f 
+      JOIN wagon w ON f.wagon = w.id
+      JOIN date d ON f.date_usage = d.id
+      WHERE w.wagon_type = '${filters.wagonType}' AND d.month_with_year = '${filters.monthWithYear}';`);
+
+  const { rows: efficiency } = await pgClient.query(
+    `SELECT 
+      SUM(f.tickets_income) as tickets_income, 
+      SUM(f.services_income) as services_income, 
+      SUM(f.wagon_prime_cost) as prime_cost, 
+      SUM(f.marginal_income) as marginal_income
+    FROM fact_wagon_efficiency f JOIN wagon w ON f.wagon = w.id
+      JOIN date d ON f.date = d.id WHERE w.wagon_type = '${filters.wagonType}' AND d.month_with_year = '${filters.monthWithYear}';`
+  );
+
+  const stats = {
+    sold_tickets_count: sales[0].sls_count,
+    sold_services_count: services[0].srv_count,
+    tickets_income: efficiency[0].tickets_income?.toFixed(2),
+    services_income: efficiency[0].services_income?.toFixed(2),
+    prime_cost: efficiency[0].prime_cost?.toFixed(2),
+    marginal_income: efficiency[0].marginal_income?.toFixed(2),
+  };
+
+  res.status(200).json(stats);
 });
 
 const server = app.listen(PORT, async () => {
