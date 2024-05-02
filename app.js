@@ -27,6 +27,9 @@ const collectStatsJob = cron.schedule("0 1 * * *", async () => {
 app.use(bodyParser.json());
 
 function makeAliasFromName(name) {
+  if (name === "service") {
+    return "srv";
+  }
   const nameParts = name.split("_");
   if (nameParts.length === 2) {
     return `${nameParts[0].charAt(0)}${nameParts[1].charAt(0)}`;
@@ -126,6 +129,110 @@ app.post("/ticket-sales/export/csv", async (req, res) => {
                         JOIN station ss ON f.start_station = ss.id
                         JOIN station fs ON f.final_station = fs.id
                         JOIN seat s ON f.seat = s.id;`;
+  const result = await pgClient.query(sqlQuery);
+  const csvWriter = createObjectCsvWriter({
+    path: "./exports/data.csv",
+    header: Object.keys(result.rows[0]).map((key) => ({
+      id: key,
+      title: key,
+    })),
+  });
+
+  await csvWriter.writeRecords(result.rows);
+  const file = `${__dirname}/exports/data.csv`;
+  res.download(file);
+  try {
+    const data = "";
+  } catch (e) {
+    console.error("Error exporting to CSV:", e);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.post("/services-sales/export/json", async (req, res) => {
+  const selectedCoumns = req.body;
+
+  const sqlQuery = `SELECT  ${objectToJsonQuery(selectedCoumns)}
+                    FROM fact_sales_services f
+                      JOIN wagon w ON f.wagon = w.id
+                      JOIN service srv ON f.service = srv.id
+                      JOIN date du ON f.date_usage = du.id
+                      JOIN time ts ON f.time_sale = ts.id
+                      JOIN station ss ON f.start_station = ss.id
+                      JOIN station fs ON f.final_station = fs.id
+                      JOIN seat s ON f.seat = s.id;`;
+
+  const result = await pgClient.query(sqlQuery);
+  fs.writeFileSync(
+    "./exports/data.json",
+    JSON.stringify(result.rows.map((row) => row.fact))
+  );
+
+  const file = `${__dirname}/exports/data.json`;
+  res.download(file);
+});
+
+app.post("/services-sales/export/csv", async (req, res) => {
+  const selectedCoumns = req.body;
+
+  const sqlQuery = `SELECT  ${objectToQuery(selectedCoumns)}
+                    FROM fact_sales_services f
+                      JOIN wagon w ON f.wagon = w.id
+                      JOIN service srv ON f.service = srv.id
+                      JOIN date du ON f.date_usage = du.id
+                      JOIN time ts ON f.time_sale = ts.id
+                      JOIN station ss ON f.start_station = ss.id
+                      JOIN station fs ON f.final_station = fs.id
+                      JOIN seat s ON f.seat = s.id;`;
+  const result = await pgClient.query(sqlQuery);
+  const csvWriter = createObjectCsvWriter({
+    path: "./exports/data.csv",
+    header: Object.keys(result.rows[0]).map((key) => ({
+      id: key,
+      title: key,
+    })),
+  });
+
+  await csvWriter.writeRecords(result.rows);
+  const file = `${__dirname}/exports/data.csv`;
+  res.download(file);
+  try {
+    const data = "";
+  } catch (e) {
+    console.error("Error exporting to CSV:", e);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.post("/wagon-efficiency/export/json", async (req, res) => {
+  const selectedCoumns = req.body;
+
+  const sqlQuery = `SELECT  ${objectToJsonQuery(selectedCoumns)}
+                    FROM fact_wagon_efficiency f
+                        JOIN wagon w ON f.wagon = w.id
+                        JOIN date d ON f.date = d.id
+                        JOIN station ss ON f.start_station = ss.id
+                        JOIN station fs ON f.final_station = fs.id;`;
+
+  const result = await pgClient.query(sqlQuery);
+  fs.writeFileSync(
+    "./exports/data.json",
+    JSON.stringify(result.rows.map((row) => row.fact))
+  );
+
+  const file = `${__dirname}/exports/data.json`;
+  res.download(file);
+});
+
+app.post("/wagon-efficiency/export/csv", async (req, res) => {
+  const selectedCoumns = req.body;
+
+  const sqlQuery = `SELECT  ${objectToQuery(selectedCoumns)}
+                    FROM fact_wagon_efficiency f
+                        JOIN wagon w ON f.wagon = w.id
+                        JOIN date d ON f.date = d.id
+                        JOIN station ss ON f.start_station = ss.id
+                        JOIN station fs ON f.final_station = fs.id;`;
   const result = await pgClient.query(sqlQuery);
   const csvWriter = createObjectCsvWriter({
     path: "./exports/data.csv",
