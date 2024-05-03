@@ -11,6 +11,7 @@ const { pgClientOLTP, pgClient } = require("./dbClient");
 const app = express();
 const bodyParser = require("body-parser");
 const { createObjectCsvWriter } = require("csv-writer");
+const { create: createXml } = require("xmlbuilder");
 const fs = require("node:fs");
 const { lodatServicesAndTicketSalesFacts } = require("./initial_load");
 const cors = require("cors");
@@ -95,6 +96,41 @@ function objectToJsonQuery(object, name) {
   return query;
 }
 
+app.post("/ticket-sales/export/xml", async (req, res) => {
+  const selectedCoumns = req.body;
+
+  const sqlQuery = `SELECT  ${objectToQuery(selectedCoumns)}
+                    FROM fact_sales_and_usage f
+                        JOIN wagon w ON f.wagon = w.id
+                        JOIN age a ON f.age = a.id
+                        JOIN date ds ON f.date_sale = ds.id
+                        JOIN date du ON f.date_usage = du.id
+                        JOIN time ts ON f.time_sale = ts.id
+                        JOIN station ss ON f.start_station = ss.id
+                        JOIN station fs ON f.final_station = fs.id
+                        JOIN seat s ON f.seat = s.id;`;
+  const result = await pgClient.query(sqlQuery);
+
+  const root = createXml({ version: "1.0" }).ele("data");
+
+  result.rows.forEach((row) => {
+    const item = root.ele("item");
+    Object.keys(row).forEach((key) => {
+      item.ele(key).txt(row[key]);
+    });
+  });
+
+  fs.writeFileSync("./exports/data.xml", root.end({ prettyPrint: true }));
+  const file = `${__dirname}/exports/data.xml`;
+  res.download(file);
+  try {
+    const data = "";
+  } catch (e) {
+    console.error("Error exporting to XML:", e);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 app.post("/ticket-sales/export/json", async (req, res) => {
   const selectedCoumns = req.body;
 
@@ -152,6 +188,41 @@ app.post("/ticket-sales/export/csv", async (req, res) => {
   }
 });
 
+app.post("/services-sales/export/xml", async (req, res) => {
+  const selectedCoumns = req.body;
+
+  const sqlQuery = `SELECT  ${objectToJsonQuery(selectedCoumns)}
+                    FROM fact_sales_services f
+                      JOIN wagon w ON f.wagon = w.id
+                      JOIN service srv ON f.service = srv.id
+                      JOIN date du ON f.date_usage = du.id
+                      JOIN time ts ON f.time_sale = ts.id
+                      JOIN station ss ON f.start_station = ss.id
+                      JOIN station fs ON f.final_station = fs.id
+                      JOIN seat s ON f.seat = s.id;`;
+
+  const result = await pgClient.query(sqlQuery);
+
+  const root = createXml({ version: "1.0" }).ele("data");
+
+  result.rows.forEach((row) => {
+    const item = root.ele("item");
+    Object.keys(row).forEach((key) => {
+      item.ele(key).txt(row[key]);
+    });
+  });
+
+  fs.writeFileSync("./exports/data.xml", root.end({ prettyPrint: true }));
+  const file = `${__dirname}/exports/data.xml`;
+  res.download(file);
+  try {
+    const data = "";
+  } catch (e) {
+    console.error("Error exporting to XML:", e);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 app.post("/services-sales/export/json", async (req, res) => {
   const selectedCoumns = req.body;
 
@@ -203,6 +274,38 @@ app.post("/services-sales/export/csv", async (req, res) => {
     const data = "";
   } catch (e) {
     console.error("Error exporting to CSV:", e);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.post("/wagon-efficiency/export/xml", async (req, res) => {
+  const selectedCoumns = req.body;
+
+  const sqlQuery = `SELECT  ${objectToJsonQuery(selectedCoumns)}
+                    FROM fact_wagon_efficiency f
+                        JOIN wagon w ON f.wagon = w.id
+                        JOIN date d ON f.date = d.id
+                        JOIN station ss ON f.start_station = ss.id
+                        JOIN station fs ON f.final_station = fs.id;`;
+
+  const result = await pgClient.query(sqlQuery);
+
+  const root = createXml({ version: "1.0" }).ele("data");
+
+  result.rows.forEach((row) => {
+    const item = root.ele("item");
+    Object.keys(row).forEach((key) => {
+      item.ele(key).txt(row[key]);
+    });
+  });
+
+  fs.writeFileSync("./exports/data.xml", root.end({ prettyPrint: true }));
+  const file = `${__dirname}/exports/data.xml`;
+  res.download(file);
+  try {
+    const data = "";
+  } catch (e) {
+    console.error("Error exporting to XML:", e);
     res.status(500).send("Internal Server Error");
   }
 });
