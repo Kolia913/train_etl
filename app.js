@@ -63,7 +63,7 @@ function objectToQuery(object, name) {
       }
     }
   }
-  return query.slice(0, -1);
+  return query.slice(0, -2);
 }
 
 function objectToJsonQuery(object, name) {
@@ -168,6 +168,7 @@ app.post("/ticket-sales/export/csv", async (req, res) => {
                         JOIN station ss ON f.start_station = ss.id
                         JOIN station fs ON f.final_station = fs.id
                         JOIN seat s ON f.seat = s.id;`;
+  console.log(sqlQuery);
   const result = await pgClient.query(sqlQuery);
   const csvWriter = createObjectCsvWriter({
     path: "./exports/data.csv",
