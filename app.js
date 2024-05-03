@@ -56,14 +56,18 @@ function objectToQuery(object, name) {
         if (name) {
           query += `${makeAliasFromName(name)}.${key} as ${makeAliasFromName(
             name
-          )}_${key}, `;
+          )}_${key},`;
         } else {
-          query += `f.${key} as f_${key}, `;
+          query += `f.${key} as f_${key},`;
         }
       }
     }
   }
-  return query.slice(0, -2);
+  if (name) {
+    return query;
+  } else {
+    return query.slice(0, -1);
+  }
 }
 
 function objectToJsonQuery(object, name) {
