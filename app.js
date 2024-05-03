@@ -329,6 +329,73 @@ app.get("/stats", async (req, res) => {
   res.status(200).json(stats);
 });
 
+app.get("/tickets", async (req, res) => {
+  const filters = req.query;
+  let sqlQuery = `SELECT  json_build_object('days_diff', f.days_diff, 'ticket_cost', f.ticket_cost, 
+                      'wagon', row_to_json(w), 
+                      'passenger_age', row_to_json(a),
+                      'date_sale', row_to_json(ds),
+                      'date_usage', row_to_json(du),
+                      'time_sale', row_to_json(ts),
+                      'start_station', row_to_json(ss),
+                      'final_station', row_to_json(fs),
+                      'seat', row_to_json(s)) as ticket
+                    FROM fact_sales_and_usage f
+                        JOIN wagon w ON f.wagon = w.id
+                        JOIN age a ON f.age = a.id
+                        JOIN date ds ON f.date_sale = ds.id
+                        JOIN date du ON f.date_usage = du.id
+                        JOIN time ts ON f.time_sale = ts.id
+                        JOIN station ss ON f.start_station = ss.id
+                        JOIN station fs ON f.final_station = fs.id
+                        JOIN seat s ON f.seat = s.id`;
+
+  if (Object.keys(filters).length) {
+    sqlQuery += " WHERE ";
+    if (filters.wagonType) {
+      sqlQuery += `w.wagon_type = '${filters.wagonType}' AND `;
+    }
+    if (filters.monthWithYear) {
+      sqlQuery += `ds.month_with_year = '${filters.monthWithYear}' AND `;
+    }
+    if (filters.date) {
+      sqlQuery += `ds.date = ${filters.date} AND `;
+    }
+    if (filters.ageGroup) {
+      sqlQuery += `a.age_group = '${filters.ageGroup}' AND `;
+    }
+    if (filters.age) {
+      sqlQuery += `a.age_value = ${filters.age} AND `;
+    }
+    sqlQuery = sqlQuery.slice(0, -4);
+  }
+  sqlQuery += ";";
+  try {
+    const { rows } = await pgClient.query(sqlQuery);
+
+    const resp = rows ? rows.map((item) => item.ticket) : [];
+
+    res.status(200).json(resp);
+  } catch (e) {
+    console.log(e);
+    res.status(500).send("Internal server error");
+  }
+});
+
+app.get("/wagon-types", async (req, res) => {
+  const { rows } = await pgClient.query(
+    "SELECT DISTINCT wagon_type FROM wagon;"
+  );
+
+  return res.status(200).json(rows ? rows?.map((item) => item.wagon_type) : []);
+});
+
+app.get("/age-groups", async (req, res) => {
+  const { rows } = await pgClient.query("SELECT DISTINCT age_group FROM age;");
+
+  return res.status(200).json(rows ? rows?.map((item) => item.age_group) : []);
+});
+
 const server = app.listen(PORT, async () => {
   try {
     await pgClientOLTP.connect();

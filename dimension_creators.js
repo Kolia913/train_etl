@@ -136,7 +136,7 @@ async function getOrCrateNADate() {
   } else {
     const { rows: insertedNADate } =
       await pgClient.query(`INSERT INTO date(date, year, month, day, season, month_with_year)
-                            VALUES (0, 0, 0, 0, 'N/A', 'N/A');`);
+                            VALUES (0, 0, 0, 0, 'N/A', 'N/A') RETURNING id;`);
     return insertedNADate[0].id;
   }
 }
