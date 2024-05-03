@@ -457,33 +457,56 @@ app.get("/tickets", async (req, res) => {
                         JOIN station ss ON f.start_station = ss.id
                         JOIN station fs ON f.final_station = fs.id
                         JOIN seat s ON f.seat = s.id`;
+  let totalQuery = `SELECT SUM(f.ticket_cost) as total
+                    FROM fact_sales_and_usage f
+                        JOIN wagon w ON f.wagon = w.id
+                        JOIN age a ON f.age = a.id
+                        JOIN date ds ON f.date_sale = ds.id
+                        JOIN date du ON f.date_usage = du.id
+                        JOIN time ts ON f.time_sale = ts.id
+                        JOIN station ss ON f.start_station = ss.id
+                        JOIN station fs ON f.final_station = fs.id
+                        JOIN seat s ON f.seat = s.id`;
 
   if (Object.keys(filters).length) {
     sqlQuery += " WHERE ";
+    totalQuery += " WHERE ";
     if (filters.wagonType) {
       sqlQuery += `w.wagon_type = '${filters.wagonType}' AND `;
+      totalQuery += `w.wagon_type = '${filters.wagonType}' AND `;
     }
     if (filters.monthWithYear) {
       sqlQuery += `ds.month_with_year = '${filters.monthWithYear}' AND `;
+      totalQuery += `ds.month_with_year = '${filters.monthWithYear}' AND `;
     }
     if (filters.date) {
       sqlQuery += `ds.date = ${filters.date} AND `;
+      totalQuery += `ds.date = ${filters.date} AND `;
     }
     if (filters.ageGroup) {
       sqlQuery += `a.age_group = '${filters.ageGroup}' AND `;
+      totalQuery += `a.age_group = '${filters.ageGroup}' AND `;
     }
     if (filters.age) {
       sqlQuery += `a.age_value = ${filters.age} AND `;
+      totalQuery += `a.age_value = ${filters.age} AND `;
     }
     sqlQuery = sqlQuery.slice(0, -4);
+    totalQuery = totalQuery.slice(0, -4);
   }
   sqlQuery += ";";
+  totalQuery += ";";
+  console.log(totalQuery);
   try {
     const { rows } = await pgClient.query(sqlQuery);
+    const { rows: total } = await pgClient.query(totalQuery);
 
     const resp = rows ? rows.map((item) => item.ticket) : [];
 
-    res.status(200).json(resp);
+    res.status(200).json({
+      total: total[0].total,
+      data: resp,
+    });
   } catch (e) {
     console.log(e);
     res.status(500).send("Internal server error");
