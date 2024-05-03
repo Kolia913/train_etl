@@ -504,13 +504,18 @@ app.get("/age-groups", async (req, res) => {
   return res.status(200).json(rows ? rows?.map((item) => item.age_group) : []);
 });
 
+app.get("/start-jobs", async (req, res) => {
+  insertSalesAndUpdateUsagesJob.start();
+  collectStatsJob.start();
+  res.status(200).send("started");
+});
+
 const server = app.listen(PORT, async () => {
   try {
     await pgClientOLTP.connect();
     await pgClient.connect();
     await create_log_tables();
-    insertSalesAndUpdateUsagesJob.start();
-    collectStatsJob.start();
+
     console.log(`Server is running on port ${PORT}`);
   } catch (e) {
     console.log(e);
